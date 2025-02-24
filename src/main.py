@@ -17,7 +17,15 @@ async def upload_csv(file: UploadFile = File(...)):
 
         conn = get_db_connection()
         cursor = conn.cursor()
+
+        # Convertir valores vacíos a NULL en columnas que lo permiten
+        df['department_id'] = df['department_id'].replace('', None)
+        df['job_id'] = df['job_id'].replace('', None)
+
+        # Convertir a lista de tuplas
         data = df[['id', 'name', 'datetime', 'department_id', 'job_id']].values.tolist()
+
+        # Insertar datos
         cursor.executemany(
             '''INSERT INTO hired_employees 
                (id, name, datetime, department_id, job_id)
