@@ -7,12 +7,9 @@ services:
     envVars:
       - key: ENV
         value: prod
-      - key: DATABASE_URL
-        fromDatabase:
-          name: mi-db-prod
-          property: connectionString
 databases:
   - name: mi-db-prod
     plan: free
-    databaseName: mi_db
-    user: mi_user
+    databaseName: bd_pruebas
+    user: users
+    password: JpjUg1Nm3xmCJ0LkeCl7VeUe5p1hEXsE
