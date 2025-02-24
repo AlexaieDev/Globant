@@ -13,7 +13,7 @@ async def upload_csv(file: UploadFile = File(...)):
     conn = None  # <-- Define conn fuera del bloque try
     try:
         df = pd.read_csv(file.file)
-        if len(df) > 1000:
+        if len(df) > 3000:
             raise HTTPException(status_code=400, detail="Límite de 1000 filas excedido")
 
         conn = get_db_connection()  # <-- Asigna conn aquí
