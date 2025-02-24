@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: mi-api-fastapi
+    runtime: docker
+    env: python
+    plan: free
+    envVars:
+      - key: ENV
+        value: prod
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mi-db-prod
+          property: connectionString
+databases:
+  - name: mi-db-prod
+    plan: free
+    databaseName: mi_db
+    user: mi_user
