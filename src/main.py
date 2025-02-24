@@ -25,6 +25,8 @@ async def upload_csv(file: UploadFile = File(...)):
         cursor = conn.cursor()
 
         # Convertir valores vacíos a NULL en columnas que lo permiten
+        df['name'] = df['name'].replace('', None)
+        df['datetime'] = df['datetime'].replace('', None)
         df['department_id'] = df['department_id'].replace('', None)
         df['job_id'] = df['job_id'].replace('', None)
 
