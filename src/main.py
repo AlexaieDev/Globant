@@ -10,13 +10,18 @@ init_db()
 
 @app.post("/upload-csv/")
 async def upload_csv(file: UploadFile = File(...)):
-    conn = None  # <-- Define conn fuera del bloque try
+    conn = None
     try:
         df = pd.read_csv(file.file)
-        if len(df) > 3000:
-            raise HTTPException(status_code=400, detail="Límite de 1000 filas excedido")
+        if len(df) > 3000:  # Cambiado de 1000 a 3000
+            raise HTTPException(status_code=400, detail="Límite de 3000 filas excedido")
 
-        conn = get_db_connection()  # <-- Asigna conn aquí
+        # Verificar que las columnas requeridas estén presentes
+        required_columns = ['id', 'name', 'datetime', 'department_id', 'job_id']
+        if not all(column in df.columns for column in required_columns):
+            raise HTTPException(status_code=400, detail="El archivo CSV no tiene las columnas requeridas")
+
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         # Convertir valores vacíos a NULL en columnas que lo permiten
@@ -36,11 +41,11 @@ async def upload_csv(file: UploadFile = File(...)):
         conn.commit()
         return {"message": f"{len(df)} filas insertadas"}
     except Exception as e:
-        if conn:  # <-- Verifica si conn está definida
+        if conn:
             conn.rollback()
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
     finally:
-        if conn:  # <-- Verifica si conn está definida
+        if conn:
             conn.close()
 
 @app.get("/hired-by-quarter/")
