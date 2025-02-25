@@ -1,7 +1,8 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
-import pandas as pd
 from src.database import get_db_connection, init_db
 import logging
+import csv
+import io
 
 app = FastAPI()
 
@@ -16,45 +17,68 @@ init_db()
 async def upload_csv(file: UploadFile = File(...)):
     conn = None
     try:
-        df = pd.read_csv(file.file)
-        if len(df) > 3000:
-            raise HTTPException(status_code=400, detail="Límite de 3000 filas excedido")
+        # Leer el contenido del archivo y manejar BOM
+        contents = await file.read()
+        content_str = contents.decode("utf-8-sig").strip()  # <--- Usar utf-8-sig para eliminar BOM
+        
+        # Verificar caracteres especiales
+        logger.info(f"Primeros 50 caracteres del CSV: {content_str[:50]}")  # <--- Para debug
+        
+        # Parsear el CSV
+        content_io = io.StringIO(content_str)
+        reader = csv.reader(
+            content_io,
+            delimiter=",",
+            skipinitialspace=True,  # <--- Ignorar espacios después del delimitador
+            quoting=csv.QUOTE_MINIMAL
+        )
+        
+        data = []
+        for row in reader:
+            logger.info(f"Fila cruda: {row}")  # <--- Para debug
+            if len(row) != 5:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Fila inválida: {row}. Debe tener 5 columnas.",
+                )
+            
+            try:
+                # Convertir campos numéricos (manejar cadenas vacías)
+                id = int(row[0])
+                name = row[1].strip() or None
+                datetime = row[2].strip() or None
+                department_id = int(row[3]) if row[3].strip() else None
+                job_id = int(row[4]) if row[4].strip() else None
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Error en fila {row}: {str(e)}",
+                )
+            
+            data.append((id, name, datetime, department_id, job_id))
 
-        # Verificar que las columnas requeridas estén presentes
-        required_columns = ['id']
-        if not all(column in df.columns for column in required_columns):
-            raise HTTPException(status_code=400, detail="El archivo CSV no tiene las columnas requeridas")
-
-        # Verificar que no haya valores faltantes en columnas que no aceptan NULL
-        if df[['id']].isnull().any().any():
-            raise HTTPException(status_code=400, detail="El archivo CSV tiene valores faltantes en columnas requeridas")
+        logger.info(f"Filas procesadas: {len(data)}")
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Convertir valores vacíos a NULL en columnas que lo permiten
-        df['name'] = df['name'].replace('', None)
-        df['datetime'] = df['datetime'].replace('', None)
-        df['department_id'] = df['department_id'].replace('', None)
-        df['job_id'] = df['job_id'].replace('', None)
-
-        # Convertir a lista de tuplas
-        data = df[['id', 'name', 'datetime', 'department_id', 'job_id']].values.tolist()
-
         # Insertar datos
         cursor.executemany(
-            '''INSERT INTO hired_employees 
-               (id, name, datetime, department_id, job_id)
-               VALUES (%s, %s, %s, %s, %s)''',
-            data
+            """
+            INSERT INTO hired_employees 
+                (id, name, datetime, department_id, job_id)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            data,
         )
         conn.commit()
-        return {"message": f"{len(df)} filas insertadas"}
+
+        return {"message": f"{len(data)} filas insertadas"}
     except Exception as e:
         logger.error(f"Error al cargar el archivo CSV: {str(e)}")
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
     finally:
         if conn:
             conn.close()
